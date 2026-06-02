@@ -8,25 +8,57 @@ import AddCard from '@/components/AddCard';
 import CardDetail from '@/components/CardDetail';
 import type { Card } from '@/lib/types';
 
+const isFirebaseConfigured = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [view, setView] = useState<'dashboard' | 'add' | 'detail'>('dashboard');
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth(), (u) => {
-      setUser(u);
+    if (!isFirebaseConfigured) {
       setLoading(false);
-    });
-    return () => unsub();
+      return;
+    }
+    try {
+      const unsub = onAuthStateChanged(auth(), (u) => {
+        setUser(u);
+        setLoading(false);
+      }, (err) => {
+        setAuthError(err.message);
+        setLoading(false);
+      });
+      return () => unsub();
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : 'Firebase init failed');
+      setLoading(false);
+    }
   }, []);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-2xl">🇸🇬 Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isFirebaseConfigured) {
+    return <SetupScreen />;
+  }
+
+  if (authError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="max-w-sm text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Setup Required</h2>
+          <p className="text-gray-600 mb-4">{authError}</p>
+          <p className="text-sm text-gray-500">Please configure Firebase credentials in <code className="bg-gray-100 px-1 rounded">.env.local</code></p>
+        </div>
       </div>
     );
   }
@@ -100,7 +132,6 @@ function LoginScreen() {
   const handleGoogleSignIn = async () => {
     try {
       setSignInError(null);
-      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth(), provider);
     } catch (err: unknown) {
@@ -132,6 +163,37 @@ function LoginScreen() {
         {signInError && (
           <p className="mt-3 text-sm text-red-600">{signInError}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SetupScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="max-w-md w-full text-center">
+        <div className="text-6xl mb-4">🇸🇬</div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Top Up Lah</h1>
+        <p className="text-gray-600 mb-6">
+          Track your restaurant stored-value balances.
+        </p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-left">
+          <h2 className="font-semibold text-amber-800 mb-3">⚡ Firebase Setup Required</h2>
+          <p className="text-sm text-amber-700 mb-3">
+            This app needs Firebase credentials to work. Create a <code className="bg-amber-100 px-1 rounded">.env.local</code> file:
+          </p>
+          <pre className="bg-amber-100 rounded-lg p-3 text-xs text-amber-900 overflow-x-auto mb-3">
+{`NEXT_PUBLIC_FIREBASE_API_KEY=your-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id`}
+          </pre>
+          <p className="text-sm text-amber-700">
+            Or set these as GitHub Secrets for deployment.
+          </p>
+        </div>
       </div>
     </div>
   );
