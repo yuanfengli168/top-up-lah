@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, User, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import Dashboard from '@/components/Dashboard';
 import AddCard from '@/components/AddCard';
 import CardDetail from '@/components/CardDetail';
@@ -24,6 +24,16 @@ export default function Home() {
       return;
     }
     try {
+      // Check for redirect result (in case we fell back from popup → redirect)
+      getRedirectResult(auth()).then((result) => {
+        if (result) {
+          // User signed in via redirect — onAuthStateChanged will pick it up
+        }
+      }).catch((err) => {
+        if (err && err.code !== 'auth/popup-closed-by-user') {
+          console.error('Redirect result error:', err.code, err.message);
+        }
+      });
       const unsub = onAuthStateChanged(auth(), (u) => {
         setUser(u);
         setLoading(false);
@@ -133,7 +143,23 @@ function LoginScreen() {
     try {
       setSignInError(null);
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth(), provider);
+      // Try popup first; fall back to redirect if COOP blocks the popup
+      try {
+        await signInWithPopup(auth(), provider);
+      } catch (err: unknown) {
+        const firebaseErr = err as { code?: string; message?: string };
+        // COOP error or popup-blocked → fall back to redirect
+        if (
+          firebaseErr.code === 'auth/popup-blocked' ||
+          firebaseErr.code === 'auth/popup-closed-by-user' ||
+          firebaseErr.message?.includes('Cross-Origin-Opener-Policy') ||
+          firebaseErr.message?.includes('popup')
+        ) {
+          await signInWithRedirect(auth(), provider);
+          return; // redirect will reload the page
+        }
+        throw err;
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Sign in failed';
       setSignInError(message);
