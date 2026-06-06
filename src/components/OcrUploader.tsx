@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import Tesseract from 'tesseract.js';
+import Tesseract, { PSM } from 'tesseract.js';
 import type { OcrResult } from '@/lib/types';
 import { preprocessImage } from '@/lib/imagePreprocess';
 
@@ -41,7 +41,7 @@ async function ocrScreenshotLocal(imageData: string): Promise<OcrInternalResult>
     // Configure Tesseract for receipts: PSM 3 = fully auto. Works well for
     // mixed layouts (logos, itemized lists, totals, footer text).
     await worker.setParameters({
-      tessedit_pageseg_mode: '3',
+      tessedit_pageseg_mode: PSM.AUTO,
     });
     const ret = await worker.recognize(imageData, {}, { text: true, blocks: true });
     for (const block of (ret.data.blocks || [])) {

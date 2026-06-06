@@ -9,6 +9,8 @@ interface ParseRequest {
   lines?: Array<{ text: string; bbox?: [number, number, number, number] }>;
 }
 
+type LineWithBbox = { text: string; bbox?: [number, number, number, number] };
+
 interface ParseResponse {
   storeName: string | null;
   balance: number | null;
@@ -48,7 +50,7 @@ CRITICAL RULES:
 
 // Build a compact prompt with bounding box data so the LLM has spatial context
 function buildPrompt(body: ParseRequest): string {
-  const lines = body.lines && body.lines.length > 0
+  const lines: LineWithBbox[] = body.lines && body.lines.length > 0
     ? body.lines
     : body.text.split('\n').map(t => ({ text: t }));
 
@@ -57,7 +59,9 @@ function buildPrompt(body: ParseRequest): string {
     .filter(l => l.text && l.text.trim().length > 0)
     .slice(0, 200) // cap at 200 lines to avoid context bloat
     .map((l, i) => {
-      const bbox = l.bbox ? ` [x:${Math.round(l.bbox[0])},y:${Math.round(l.bbox[1])}]` : '';
+      const bbox = (l.bbox && l.bbox.length >= 2)
+        ? ` [x:${Math.round(l.bbox[0])},y:${Math.round(l.bbox[1])}]`
+        : '';
       return `L${i.toString().padStart(3, '0')}${bbox}: ${l.text}`;
     })
     .join('\n');
